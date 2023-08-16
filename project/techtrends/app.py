@@ -3,6 +3,9 @@ import sqlite3
 from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
 from werkzeug.exceptions import abort
 
+import logging
+
+
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
@@ -18,9 +21,16 @@ def get_post(post_id):
     connection.close()
     return post
 
+def get_post_count():
+    connection = get_db_connection()
+    count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()
+    connection.close()
+    return count
+
 # Define the Flask application
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your secret key'
+logging.basicConfig(level=logging.DEBUG)
 
 # Define the main route of the web application 
 @app.route('/')
@@ -36,13 +46,16 @@ def index():
 def post(post_id):
     post = get_post(post_id)
     if post is None:
-      return render_template('404.html'), 404
+        app.logger.debug(f'Article with post_id "{post_id}" not found.')
+        return render_template('404.html'), 404
     else:
-      return render_template('post.html', post=post)
+        app.logger.debug(f'Article "{post[2]}" retrieved!')
+        return render_template('post.html', post=post)
 
 # Define the About Us page
 @app.route('/about')
 def about():
+    app.logger.debug(f'About Us page retrieved!')
     return render_template('about.html')
 
 # Define the post creation functionality 
@@ -61,9 +74,22 @@ def create():
             connection.commit()
             connection.close()
 
+            app.logger.debug(f'Article "{title}" created!')
+
             return redirect(url_for('index'))
 
     return render_template('create.html')
+
+@app.route('/healthz')
+def healthz():
+    return jsonify({})
+
+@app.route('/metrics')
+def metrics():
+    return jsonify({
+        'db_connection_count': 1,
+        'post_count': get_post_count()[0]
+    })
 
 # start the application on port 3111
 if __name__ == "__main__":
